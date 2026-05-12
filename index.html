@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FES Tracker</title>
+    
+    <script src="cordova.js"></script>
+
+    <style>
+        :root {
+            --primary: #007bff;
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #ffffff;
+            --success: #28a745;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            background: #333;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        .nfc-active { background: var(--success); color: white; }
+        
+        .calendar-view {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .tile {
+            background: var(--card);
+            padding: 25px 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #333;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .tile:active { transform: scale(0.95); background: #2a2a2a; }
+        
+        #nfc-display {
+            margin-top: 25px;
+            padding: 20px;
+            border: 2px dashed #444;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            background: rgba(255,255,255,0.02);
+            box-sizing: border-box;
+        }
+        #tag-uid {
+            font-size: 1.4em;
+            font-family: monospace;
+            display: block;
+            margin-top: 5px;
+            color: #aaa;
+        }
+        .log-container {
+            width: 100%;
+            max-width: 400px;
+            margin-top: 25px;
+            font-size: 0.8em;
+            color: #888;
+            max-height: 120px;
+            overflow-y: auto;
+            border-top: 1px solid #333;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>FES Tracker</h1>
+        <div id="nfc-status" class="status-badge">Inicjalizacja...</div>
+    </div>
+
+    <div class="calendar-view">
+        <h3 id="current-date" style="margin:0 0 10px 0; text-align:center;">Maj 2026</h3>
+        <p style="text-align:center; font-size: 0.9em; color: #888; margin:0;">System gotowy do rejestracji pracy.</p>
+    </div>
+
+    <div class="grid">
+        <div class="tile" onclick="startTask('Betrieb / Produkcja')">🏭<br><br>Betrieb</div>
+        <div class="tile" onclick="startTask('Lager / Magazyn')">📦<br><br>Lager</div>
+        <div class="tile" onclick="startTask('Maszyna 1')">⚙️<br><br>M1</div>
+        <div class="tile" onclick="startTask('Maszyna 2')">⚙️<br><br>M2</div>
+    </div>
+
+    <div id="nfc-display">
+        <strong>ZBLIŻ KARTĘ LUB BRELOK NFC:</strong>
+        <span id="tag-uid">Brak skanu</span>
+    </div>
+
+    <div class="log-container" id="app-log">
+        <div>[System] Aplikacja uruchomiona.</div>
+    </div>
+
+    <script>
+        const logArea = document.getElementById('app-log');
+        const statusBadge = document.getElementById('nfc-status');
+        const uidDisplay = document.getElementById('tag-uid');
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logArea.prepend(div);
+        }
+
+        // --- NATYWNA OBSŁUGA REJESTRACJI NFC CORDOVA ---
+
+        document.addEventListener('deviceready', () => {
+            addLog("System Cordova gotowy.");
+            
+            if (typeof nfc !== 'undefined') {
+                statusBadge.textContent = "NFC: Aktywne";
+                statusBadge.classList.add('nfc-active');
+                addLog("Antena NFC czuwa w tle...");
+
+                // Uruchamiamy ciągłe słuchanie anteny
+                nfc.addNdefListener(
+                    onNfcSuccess,
+                    () => console.log("Listener NFC zarejestrowany pomyślnie."),
+                    (err) => addLog("Błąd uruchomienia anteny: " + JSON.stringify(err))
+                );
+            } else {
+                statusBadge.textContent = "NFC: Brak wtyczki sprzętowej";
+                addLog("BŁĄD: Brak dostępu do modułu NFC telefonu.");
+            }
+        }, false);
+
+        // Funkcja wykonująca się AUTOMATYCZNIE po zbliżeniu karty
+        function onNfcSuccess(nfcEvent) {
+            // Pobranie surowych bajtów ID tagu
+            const tagId = nfcEvent.tag.id;
+            
+            // Konwersja bajtów na czytelny dla oka format HEX (np. 04:DE:7A:BC)
+            const uid = tagId.map(x => 
+                ("00" + x.toString(16).toUpperCase()).slice(-2)
+            ).join(":");
+
+            // Wyświetlenie odczytanego UID na ekranie
+            uidDisplay.textContent = uid;
+            uidDisplay.style.color = "#00ff00";
+            uidDisplay.style.fontWeight = "bold";
+            
+            addLog("Odczytano UID karty: " + uid);
+
+            // Delikatna wibracja telefonu jako potwierdzenie skanu
+            if (navigator.vibrate) navigator.vibrate(100);
+            
+            alert("Zarejestrowano kartę pracownika!\nUID: " + uid);
+        }
+
+        function startTask(taskName) {
+            addLog("Aktywowano kafelek: " + taskName);
+        }
+
+        // Automatyczne ustawienie bieżącego miesiąca i roku
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    </script>
+</body>
+</html>
