@@ -1,0 +1,71 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Cordova
+      run: npm install -g cordova
+
+    - name: Create Cordova Structure & Build
+      run: |
+        # 1. Tworzymy czysty projekt Cordova
+        cordova create nfcapp com.mareksoftserwis.fes "NFCTracker"
+        cd nfcapp
+        
+        # 2. Dodajemy platformę Android
+        cordova platform add android@12.0.0 --no-telemetry
+        
+        # 3. Nadpisujemy plik index.html naszym kodem z repozytorium
+        if [ -f "../../index.html" ]; then
+          cp ../../index.html www/index.html
+        elif [ -f "../index.html" ]; then
+          cp ../index.html www/index.html
+        else
+          echo "BLAD: Nie znaleziono pliku index.html w repozytorium!"
+          exit 1
+        fi
+        
+        # 4. Generujemy plik config.xml bezpośrednio w skrypcie (odporne na błędy ścieżek!)
+        cat <<EOF > config.xml
+        <?xml version='1.0' encoding='utf-8'?>
+        <widget id="com.mareksoftserwis.fes" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+            <name>NFC Tracker Pro</name>
+            <description>NFC Task Timer Application</description>
+            <content src="index.html" />
+            <plugin name="phonegap-nfc" spec="1.2.0" />
+            <access origin="*" />
+            <allow-intent href="http://*/*" />
+            <allow-intent href="https://*/*" />
+        </widget>
+        EOF
+        
+        # 5. Instalujemy wtyczkę NFC i budujemy plik APK
+        cordova plugin add phonegap-nfc --no-telemetry
+        cordova build android --device --no-telemetry
+
+    - name: Upload Finished APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: nfcapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
