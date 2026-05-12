@@ -1,0 +1,47 @@
+name: Build NFC App
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Initialize Project
+        run: |
+          npm init -y
+          npm install @capacitor/cli @capacitor/core @capacitor/android
+          mkdir -p www
+          cp index.html www/index.html
+          npx cap init "FESTracker" "com.mareksoftserwis.fes" --web-dir=www
+          npx cap add android
+
+      - name: Fix Kotlin & Permissions
+        run: |
+          # Wstrzykiwanie uprawnień NFC
+          sed -i '/<application/i <uses-permission android:name="android.permission.NFC" />\n<uses-feature android:name="android.hardware.nfc" android:required="true" />' android/app/src/main/AndroidManifest.xml
+          # Naprawa wersji Kotlina (rozwiązuje błędy z logu 1000038131/133)
+          sed -i 's/kotlin_version = .*/kotlin_version = "1.9.10"/' android/build.gradle
+
+      - name: Build Android App
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FES-Tracker-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
