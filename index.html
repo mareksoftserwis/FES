@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NFC Tracker Pro</title>
+    <!-- Dołączenie skryptu Cordovy - to jest kluczowe dla działania NFC! -->
+    <script src="cordova.js"></script>
+    <style>
+        :root {
+            --primary: #007bff;
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #ffffff;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            background: #333;
+            margin-bottom: 15px;
+        }
+        .nfc-active { background: #28a745; color: white; }
+        
+        .calendar-view {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .tile {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #333;
+            transition: transform 0.1s;
+        }
+        .tile:active { transform: scale(0.95); background: #2a2a2a; }
+        .tile i { font-size: 24px; display: block; margin-bottom: 10px; }
+        
+        #nfc-display {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px dashed #444;
+            border-radius: 10px;
+            width: 80%;
+            text-align: center;
+        }
+        .log-container {
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+            font-size: 0.8em;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>FES Tracker</h1>
+        <div id="nfc-status" class="status-badge">Oczekiwanie na system...</div>
+    </div>
+
+    <div class="calendar-view">
+        <h3 id="current-date">Maj 2026</h3>
+        <!-- Tutaj Twój widżet kalendarza -->
+        <p style="text-align:center; font-size: 0.9em; color: #888;">System gotowy do rejestracji czasu pracy.</p>
+    </div>
+
+    <div class="grid">
+        <div class="tile" onclick="startTask('Produkcja')">🏭<br>Betrieb</div>
+        <div class="tile" onclick="startTask('Magazyn')">📦<br>Lager</div>
+        <div class="tile" onclick="startTask('Maszyna 1')">⚙️<br>M1</div>
+        <div class="tile" onclick="startTask('Maszyna 2')">⚙️<br>M2</div>
+    </div>
+
+    <div id="nfc-display">
+        <strong>OSTATNI TAG:</strong><br>
+        <span id="tag-uid">Brak skanu</span>
+    </div>
+
+    <div class="log-container" id="app-log">
+        <div>[System] Uruchamianie...</div>
+    </div>
+
+    <script>
+        const logArea = document.getElementById('app-log');
+        const statusBadge = document.getElementById('nfc-status');
+        const uidDisplay = document.getElementById('tag-uid');
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logArea.prepend(div);
+        }
+
+        // --- OBSŁUGA CORDOVA & NFC ---
+
+        document.addEventListener('deviceready', () => {
+            addLog("Cordova gotowa.");
+            statusBadge.textContent = "NFC: Aktywne";
+            statusBadge.classList.add('nfc-active');
+
+            if (typeof nfc !== 'undefined') {
+                // Rejestracja słuchacza tagów NDEF
+                nfc.addNdefListener(
+                    onNfcSuccess,
+                    () => addLog("Słucham tagów NFC..."),
+                    (err) => addLog("Błąd NFC: " + JSON.stringify(err))
+                );
+            } else {
+                addLog("BŁĄD: Wtyczka NFC nie załadowana!");
+                statusBadge.textContent = "NFC: Brak wtyczki";
+            }
+        }, false);
+
+        function onNfcSuccess(nfcEvent) {
+            // Pobranie ID tagu z tablicy bajtów
+            const tagId = nfcEvent.tag.id;
+            
+            // Konwersja na format HEX (np. 04:A2:F1...)
+            const uid = tagId.map(x => 
+                ("00" + x.toString(16).toUpperCase()).slice(-2)
+            ).join(":");
+
+            uidDisplay.textContent = uid;
+            uidDisplay.style.color = "#00ff00";
+            addLog("Odczytano UID: " + uid);
+
+            // Wibracja przy sukcesie (wymaga pluginu cordova-plugin-vibration, ale nie zepsuje kodu jeśli go nie ma)
+            if (navigator.vibrate) navigator.vibrate(100);
+            
+            // Opcjonalnie: dźwięk lub akcja zapisu
+            alert("Zalogowano Tag: " + uid);
+        }
+
+        function startTask(taskName) {
+            addLog("Wybrano zadanie: " + taskName);
+            // Tutaj możesz dodać logikę startu timera
+        }
+
+        // Ustawienie aktualnej daty
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+
+    </script>
+</body>
+</html>
